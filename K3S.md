@@ -1,91 +1,197 @@
-CÀI ĐẶT K3S – SINGLE NODE (BARE-METAL)
+# Install k3s on Ubuntu Server (Bare-metal, Production Oriented)
 
-Mục đích:
-- Cài k3s trên 1 node duy nhất
-- Node vừa là control-plane vừa là worker
-- Phù hợp bare-metal (X99 / Xeon)
-- Có thể mở rộng thêm node sau mà không phải cài lại
+This document describes how to install **k3s** on a **bare-metal Ubuntu Server**.
+The setup is optimized for:
+- X99 / Xeon servers
+- Long-running workloads
+- Backend / database / GitOps
+- Minimal overhead, high stability
 
-Yêu cầu:
-- Ubuntu Server 22.04 LTS
-- Kernel 5.15+
---------------------------------------------------
-A. CHUẨN BỊ HỆ THỐNG (BẮT BUỘC)
---------------------------------------------------
+---
 
-A1. Tắt swap (Kubernetes không chạy với swap)
+## Goals
 
+- Lightweight Kubernetes on bare metal
+- No hypervisor required
+- Predictable resource usage
+- Easy to debug and maintain
+- Suitable for single-node or future scale-out
+
+---
+
+## Recommended Environment
+
+- OS: Ubuntu Server 22.04 LTS
+- Kernel: 5.15+
+- CPU: Intel Xeon (many cores)
+- RAM: 64 GB+
+- Disk: SSD / NVMe preferred
+- Network: Static IP recommended
+
+---
+
+## 1. OS Preparation (Important)
+
+### 1.1 Disable swap
+
+```sh
 sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
+```
 
-Kiểm tra:
+Verify:
+
+```sh
 free -h
+```
 
---------------------------------------------------
-A2. Load kernel modules cần cho Kubernetes
---------------------------------------------------
+---
 
-Tạo file cấu hình load module khi boot:
+### 1.2 Load required kernel modules
 
-sudo tee /etc/modules-load.d/k8s.conf <<EOF
+```sh
+cat <<EOF | sudo tee /etc/modules-load.d/k3s.conf
 overlay
 br_netfilter
 EOF
+```
 
-Load ngay các module:
-
+```sh
 sudo modprobe overlay
 sudo modprobe br_netfilter
+```
 
---------------------------------------------------
-A3. Cấu hình sysctl cho Kubernetes networking
---------------------------------------------------
+---
 
-Tạo file sysctl:
+### 1.3 Kernel sysctl tuning
 
-sudo tee /etc/sysctl.d/99-kubernetes.conf <<EOF
-net.bridge.bridge-nf-call-iptables=1
-net.bridge.bridge-nf-call-ip6tables=1
-net.ipv4.ip_forward=1
-vm.swappiness=10
+```sh
+cat <<EOF | sudo tee /etc/sysctl.d/99-k3s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+vm.swappiness                       = 10
 EOF
+```
 
-Apply cấu hình:
+Apply:
 
+```sh
 sudo sysctl --system
+```
 
---------------------------------------------------
-B. CÀI K3S (SINGLE NODE)
---------------------------------------------------
+---
 
-Cài k3s server.
-Tắt Traefik và ServiceLB để chủ động ingress sau này.
+## 2. Install k3s (Server Mode)
 
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --disable traefik --disable servicelb --write-kubeconfig-mode 644 --kubelet-arg=max-pods=250" sh -
+This installs **k3s server + agent** on the same node
+(single-node cluster).
 
---------------------------------------------------
-C. KIỂM TRA K3S
---------------------------------------------------
+### 2.1 Install k3s
 
+```sh
+curl -sfL https://get.k3s.io | sudo sh -s - \
+  --disable traefik \
+  --disable servicelb \
+  --write-kubeconfig-mode 644 \
+  --kubelet-arg=max-pods=250
+```
+
+Explanation:
+- Disable Traefik: use your own ingress later
+- Disable ServiceLB: use MetalLB if needed
+- Increase max pods for large machines
+
+---
+
+### 2.2 Verify installation
+
+```sh
 kubectl get nodes -o wide
+```
 
-Kết quả mong đợi:
-- Node ở trạng thái Ready
-- Role: control-plane, master
+Expected:
+- STATUS: Ready
+- ROLES: control-plane,master
 
---------------------------------------------------
-D. CÀI CÔNG CỤ CƠ BẢN (KHUYẾN NGHỊ)
---------------------------------------------------
+---
 
-sudo apt install -y curl htop jq ca-certificates apt-transport-https
+## 3. kubeconfig Access
 
---------------------------------------------------
-E. BACKUP TỐI THIỂU (RẤT QUAN TRỌNG)
---------------------------------------------------
+k3s installs kubeconfig at:
 
-Tạo snapshot etcd thủ công:
+```sh
+/etc/rancher/k3s/k3s.yaml
+```
 
-sudo k3s etcd-snapshot save
+To use as normal user:
 
-Snapshot nằm trong:
-/var/lib/rancher/k3s/server/db/snapshots
+```sh
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $(id -u):$(id -g) ~/.kube/config
+```
+
+Test:
+
+```sh
+kubectl get pods -A
+```
+
+---
+
+## 5. Networking Notes
+
+- Default CNI: flannel
+- Works well for most setups
+- Replace only if you really need (e.g. Cilium)
+
+---
+
+## 6. Basic Health Checks
+
+```sh
+kubectl get nodes
+kubectl get pods -A
+kubectl top nodes
+kubectl top pods -A
+```
+
+---
+
+## 7. Logs and Debugging
+
+k3s service:
+
+```sh
+sudo systemctl status k3s
+sudo journalctl -u k3s -f
+```
+
+containerd logs:
+
+```sh
+sudo journalctl -u containerd -f
+```
+
+---
+
+## 8. Uninstall k3s (if needed)
+
+```sh
+sudo /usr/local/bin/k3s-uninstall.sh
+```
+
+---
+
+## Conclusion
+
+- k3s is ideal for bare-metal servers
+- Minimal overhead, easy operations
+- Excellent choice for X99 / Xeon systems
+- Scales well from single-node to multi-node
+
+This document can be used directly as:
+- installation guide
+- runbook
+- infra documentation
