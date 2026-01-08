@@ -1,2 +1,0 @@
-# baremetal
-bare metal setup
