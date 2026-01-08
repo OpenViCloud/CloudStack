@@ -1,206 +1,215 @@
-# Cài đặt Cockpit trên Ubuntu Server (có tùy chọn KVM / libvirt)
+# Install Cockpit on Ubuntu Server (with optional KVM / libvirt)
 
-Tài liệu hướng dẫn cài Cockpit để quản trị Linux server / bare-metal.
-Có thể dùng Cockpit thuần (không VM) hoặc mở rộng thêm KVM / libvirt khi cần.
+This document describes how to install **Cockpit** on an Ubuntu Server
+for **bare-metal usage**.
+Cockpit can be used **standalone** (no virtualization), and **optionally**
+extended with **KVM / libvirt** only when virtual machines are required.
 
-Phù hợp cho:
-- Bare-metal X99 / Xeon
-- k3s node
-- Server backend / DB
-- Lab VM nhẹ (tùy chọn)
-
----
-
-## Mục tiêu
-
-- Quản trị server qua web UI
-- Theo dõi CPU / RAM / Disk / Network / systemd
-- Mặc định KHÔNG cài hypervisor
-- Chỉ cài KVM / libvirt khi thực sự cần VM
+Suitable for:
+- Bare-metal X99 / Xeon servers
+- k3s nodes
+- Backend / database servers
+- Light VM lab (optional)
 
 ---
 
-## Môi trường khuyến nghị
+## Goals
+
+- Web-based server management
+- Monitor CPU / RAM / Disk / Network / systemd
+- Default setup **without hypervisor**
+- Add KVM / libvirt only if VMs are really needed
+
+---
+
+## Recommended Environment
 
 - OS: Ubuntu Server 22.04 LTS
 - Kernel: 5.15+
-- CPU: Intel Xeon (VT-x, VT-d)
-- Vai trò: Bare-metal server
+- CPU: Intel Xeon (VT-x / VT-d supported)
+- Role: Bare-metal server
 
 ---
 
-## 1. Cài Cockpit (thuần – không KVM)
+## 1. Install Cockpit
 
+```sh
 sudo apt update
 sudo apt install -y cockpit
+```
+
+⚠️ Do NOT install the following packages at this stage:
+
+- cockpit-machines
+- libvirt-daemon
+- qemu-kvm
 
 ---
 
-## 2. Khởi động Cockpit
+## 2. Enable and start Cockpit
 
+```sh
 sudo systemctl enable --now cockpit.socket
+```
 
-Kiểm tra:
+Verify status:
+
+```sh
 systemctl status cockpit.socket
+```
 
 ---
 
-## 3. Truy cập giao diện Web
+## 3. Access the Web UI
 
+```
 https://<SERVER_IP>:9090
+```
 
-- Đăng nhập bằng user Linux (có sudo)
-- Chấp nhận self-signed certificate
+- Log in with a Linux user that has sudo privileges
+- Accept the self-signed certificate warning
 
 ---
 
-## 4. Chức năng Cockpit (khi chưa có KVM)
+## 4. Available features (without KVM)
 
-- CPU / Load
-- RAM / Swap
-- Disk / IO
+- CPU / Load monitoring
+- Memory / Swap
+- Disk and I/O
 - Network
 - systemd services
 - journal logs
 - Web terminal
 
-Không có Virtual Machines
+❌ Virtual Machines are **not** available yet
 
 ---
 
-## 5. Cài module giám sát (khuyến nghị)
+## 5. Install monitoring add-on (recommended)
 
-cockpit-pcp (monitoring chi tiết)
+### cockpit-pcp (advanced metrics)
 
+```sh
 sudo apt install -y cockpit-pcp
+```
+
+Provides:
+- Per-core CPU metrics
+- Disk I/O statistics
+- Network throughput
 
 ---
 
-## 6. (TÙY CHỌN) Cài KVM + libvirt
+## 6. (Optional) Install KVM and libvirt
 
-Chỉ thực hiện bước này nếu cần chạy VM.
-Nếu chỉ chạy k3s / container thì bỏ qua.
+⚠️ Perform this section **only if you need virtual machines**.
+If you only run k3s or containers, **skip this entire section**.
 
-### 6.1 Kiểm tra CPU hỗ trợ ảo hóa
+---
 
+### 6.1 Check CPU virtualization support
+
+```sh
 egrep -c '(vmx|svm)' /proc/cpuinfo
+```
 
-Kết quả > 0 là CPU hỗ trợ.
+Result > 0 means virtualization is supported.
 
 ---
 
-### 6.2 Cài KVM và libvirt
+### 6.2 Install KVM and libvirt packages
 
+```sh
 sudo apt install -y \
   qemu-kvm \
   libvirt-daemon-system \
   libvirt-clients \
   bridge-utils
+```
 
 ---
 
-### 6.3 Thêm user vào group libvirt và kvm
+### 6.3 Add user to libvirt and kvm groups
 
+```sh
 sudo usermod -aG libvirt,kvm $USER
 newgrp libvirt
+```
 
 ---
 
-### 6.4 Enable và kiểm tra libvirt
+### 6.4 Enable and verify libvirt
 
+```sh
 sudo systemctl enable --now libvirtd
+```
+
+```sh
 virsh list --all
+```
 
 ---
 
-## 7. (TÙY CHỌN) Bật quản lý VM trong Cockpit
+## 7. (Optional) Enable VM management in Cockpit
 
-Cài module quản lý VM cho Cockpit:
+Install the Cockpit VM module:
 
+```sh
 sudo apt install -y cockpit-machines
+```
 
 Restart Cockpit:
 
+```sh
 sudo systemctl restart cockpit.socket
+```
 
-Sau đó Cockpit sẽ xuất hiện mục:
-Virtual Machines
-
----
-
-## 8. Network cho VM (khuyến nghị)
-
-Mặc định libvirt tạo:
-- NAT bridge: virbr0
-
-Phù hợp cho:
-- VM test
-- Lab nội bộ
-
-Không khuyến nghị chạy VM prod nặng song song k3s trên cùng máy.
+After this, a **Virtual Machines** section will appear in Cockpit.
 
 ---
 
-## 9. Bảo mật Cockpit
+## 8. VM networking notes
 
-### Cách 1: Giới hạn IP truy cập bằng UFW
+By default, libvirt creates:
+- NAT bridge: `virbr0`
 
+Recommended for:
+- Test VMs
+- Lab environments
+
+❌ Not recommended to run heavy production VMs alongside k3s on the same host.
+
+---
+
+## 9. Secure Cockpit access
+
+### Option 1: Restrict access by IP (UFW)
+
+```sh
 sudo ufw allow from 192.168.0.0/16 to any port 9090
 sudo ufw deny 9090
+```
 
 ---
 
-### Cách 2: Bind localhost + SSH tunnel (khuyến nghị)
+## 10. Remove KVM / libvirt (if no longer needed)
 
-sudo mkdir -p /etc/systemd/system/cockpit.socket.d
-sudo nano /etc/systemd/system/cockpit.socket.d/listen.conf
-
-Nội dung file:
-
-[Socket]
-ListenStream=
-ListenStream=127.0.0.1:9090
-
-Reload và restart:
-
-sudo systemctl daemon-reexec
-sudo systemctl restart cockpit.socket
-
-Truy cập qua SSH tunnel:
-
-ssh -L 9090:localhost:9090 user@server_ip
-
----
-
-## 10. Những điều KHÔNG nên làm
-
-- Không chạy VM prod nặng chung với k3s
-- Không bật auto-update OS trên server prod
-- Không overcommit CPU/RAM khi dùng VM
-- Không dùng Cockpit thay Proxmox cho hạ tầng lớn
-
----
-
-## 11. Gỡ KVM / libvirt (nếu không dùng nữa)
-
+```sh
 sudo systemctl stop libvirtd
 sudo apt remove --purge \
   cockpit-machines \
   qemu-kvm \
   libvirt-daemon-system \
   libvirt-clients
+```
 
 ---
 
-## 12. Gỡ Cockpit hoàn toàn
+## 11. Remove Cockpit completely
 
+```sh
 sudo systemctl stop cockpit.socket
 sudo apt remove --purge cockpit cockpit-pcp
+```
 
 ---
-
-## Kết luận
-
-- Cockpit có thể chạy độc lập
-- KVM / libvirt là tùy chọn
-- Phù hợp cho k3s bare-metal, DB / backend server, và lab VM nhỏ
