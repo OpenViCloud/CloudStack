@@ -113,7 +113,7 @@ After=multi-user.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/cpupower frequency-set -g powersave
-ExecStart=/usr/bin/cpupower frequency-set -u 2200MHz
+ExecStart=/usr/bin/cpupower frequency-set -u 2000MHz
 ExecStart=/bin/sh -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled'
 ExecStart=/bin/sh -c 'echo never > /sys/kernel/mm/transparent_hugepage/defrag'
 RemainAfterExit=yes
