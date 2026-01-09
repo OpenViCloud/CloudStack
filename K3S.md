@@ -107,19 +107,7 @@ Explanation:
 
 ---
 
-### 2.2 Verify installation
-
-```sh
-kubectl get nodes -o wide
-```
-
-Expected:
-- STATUS: Ready
-- ROLES: control-plane,master
-
----
-
-### 2.3 Install Calico CNI
+### 2.2 Install Calico CNI
 
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/calico.yaml
@@ -128,6 +116,33 @@ kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/
 Expected:
 - STATUS: Ready
 - ROLES: control-plane,master
+
+### 2.2 Install ArgoCd
+
+```sh
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+```
+
+```sh
+kubectl get ns argocd >/dev/null 2>&1 || kubectl create ns argocd
+```
+
+```sh
+helm upgrade --install argocd argo/argo-cd \
+  --namespace argocd \
+  --version 8.5.0 \
+  --set installCRDs=true \
+  --set server.service.type=ClusterIP \
+  --set server.extraArgs="{--insecure}" \
+  --set configs.params.server\\.insecure=true \
+  --set dex.enabled=false
+```
+
+Expected:
+- STATUS: Ready
+- ROLES: control-plane,master
+
 ---
 
 ## 3. kubeconfig Access
