@@ -129,6 +129,7 @@ Enable and start the service:
 sudo systemctl daemon-reexec
 sudo systemctl enable x99-longevity-tuning
 sudo systemctl start x99-longevity-tuning
+systemctl status x99-longevity-tuning.service
 ```
 
 ✔ After this step, **all tuning survives reboot**.
@@ -167,6 +168,7 @@ Run sensor detection once:
 
 ```sh
 sudo sensors-detect
+sensors
 ```
 
 Monitor regularly:
@@ -188,7 +190,7 @@ cpupower frequency-info | grep "current policy"
 
 Expected output includes:
 - governor: powersave
-- max frequency: 2.20 GHz
+- max frequency: 2.00 GHz
 
 ---
 
