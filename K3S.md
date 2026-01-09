@@ -90,11 +90,14 @@ This installs **k3s server + agent** on the same node
 ### 2.1 Install k3s
 
 ```sh
-curl -sfL https://get.k3s.io | sudo sh -s - \
-  --disable traefik \
-  --disable servicelb \
-  --write-kubeconfig-mode 644 \
-  --kubelet-arg=max-pods=250
+curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="v1.34.2+k3s1" \
+  sh -s - server \
+    --disable traefik \
+    --disable servicelb \
+    --disable-network-policy \
+    --flannel-backend=none \
+    --write-kubeconfig-mode 644
 ```
 
 Explanation:
@@ -114,6 +117,19 @@ Expected:
 - STATUS: Ready
 - ROLES: control-plane,master
 
+---
+
+### 2.3 Install Calico CNI
+
+```sh
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/calico.yaml
+kubectl get pods -n calico-system
+kubectl get nodes -o wide
+```
+
+Expected:
+- STATUS: Ready
+- ROLES: control-plane,master
 ---
 
 ## 3. kubeconfig Access
