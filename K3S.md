@@ -123,8 +123,6 @@ Expected:
 
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/calico.yaml
-kubectl get pods -n calico-system
-kubectl get nodes -o wide
 ```
 
 Expected:
@@ -156,7 +154,7 @@ kubectl get pods -A
 
 ---
 
-## 5. Networking Notes
+## 4. Networking Notes
 
 - Default CNI: flannel
 - Works well for most setups
@@ -164,7 +162,7 @@ kubectl get pods -A
 
 ---
 
-## 6. Basic Health Checks
+## 5. Basic Health Checks
 
 ```sh
 kubectl get nodes
@@ -175,7 +173,7 @@ kubectl top pods -A
 
 ---
 
-## 7. Logs and Debugging
+## 6. Logs and Debugging
 
 k3s service:
 
@@ -192,7 +190,7 @@ sudo journalctl -u containerd -f
 
 ---
 
-## 8. Uninstall k3s (if needed)
+## 7. Uninstall k3s (if needed)
 
 ```sh
 sudo /usr/local/bin/k3s-uninstall.sh
