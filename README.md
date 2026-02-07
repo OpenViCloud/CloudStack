@@ -1,129 +1,137 @@
-# CloudStack Baremetal Bootstrap
+# CloudStack Baremetal Bootstrap (Rocky Linux)
 
-Bootstrap Apache CloudStack from empty baremetal machines using a script-first and reproducible approach.
+Bootstrap Apache CloudStack on empty baremetal machines using a script-first,
+reproducible approach. This project avoids UI-based configuration and keeps
+all system state explicitly defined in code.
 
-Target topology:
-- 1 Management node
-- 1 KVM Worker node
+================================================================
 
-Designed for:
-- No UI clicking
-- PXE / iDRAC / cloud-init friendly
-- Lab, PoC, and small production setups
+## 1. Target Topology
 
----
+- 1 Management Node
+- 1 KVM Worker Node (scalable to multiple workers)
 
-## Project Structure
+================================================================
 
-```
-cloudstack-bootstrap/
-├── README.md
-├── manager/
-│   └── bootstrap-manager.sh
-├── worker/
-│   └── bootstrap-worker.sh
-└── cloudmonkey/
-    └── cloudmonkey-init.sh
-```
+## 2. High-Level Architecture
 
----
+CloudStack follows a strict **Control Plane / Data Plane** architecture.
 
-## Bootstrap Flow
+================================================================
 
-1. Management bootstrap
-   - OS preparation
-   - MySQL
-   - CloudStack Management Server
-   - NFS (Primary and Secondary for demo purposes)
+                    +----------------------------+
+                    |      Admin / Automation    |
+                    |  (Browser / cloudmonkey)   |
+                    +-------------+--------------+
+                                  |
+                                  | HTTPS / REST API
+                                  |
+        +-------------------------v-------------------------+
+        |              CloudStack Management Node            |
+        |                    Rocky Linux                     |
+        |----------------------------------------------------|
+        |  cloudstack-management                              |
+        |  - Scheduler                                       |
+        |  - Orchestration Engine                            |
+        |  - Network & Storage Control                       |
+        |                                                    |
+        |  Embedded Jetty (Spring Boot)                      |
+        |  - CloudStack REST API                             |
+        |  - Web UI                                         |
+        |                                                    |
+        |  MariaDB                                          |
+        |  - Global metadata                                |
+        |  - VM / Network / Storage state                   |
+        |                                                    |
+        |  NFS Server (lab only)                             |
+        |  - Primary Storage                                |
+        |  - Secondary Storage                              |
+        +-------------------------+--------------------------+
+                                  |
+                                  | Management Network
+                                  | (Agent & Control Traffic)
+                                  |
+        +-------------------------v--------------------------+
+        |                 KVM Worker Node(s)                 |
+        |                    Rocky Linux                     |
+        |----------------------------------------------------|
+        |  cloudstack-agent                                  |
+        |  - Receives instructions from Manager              |
+        |                                                    |
+        |  libvirt + qemu-kvm                                |
+        |  - VM lifecycle execution                          |
+        |                                                    |
+        |  Linux Bridges                                    |
+        |  - cloudbr0 (Management / Public)                  |
+        |  - cloudbr1 (Guest / Private)                      |
+        |                                                    |
+        |  Guest Virtual Machines                            |
+        +----------------------------------------------------+
 
-2. Worker bootstrap
-   - KVM and libvirt
-   - Network bridge
-   - CloudStack Agent
+================================================================
 
-3. CloudStack logical initialization
-   - Zone
-   - Pod
-   - Cluster
-   - Storage
+Architecture rules:
+- Management Node is control-plane only
+- No guest VMs run on the Management Node
+- All orchestration decisions originate from the Manager
+- Worker Nodes never communicate directly with each other
+- Agents maintain a persistent control channel to the Manager
 
----
+================================================================
 
-## Usage
+## 3. Management Node Architecture
 
-### 1. Bootstrap Management Node
+### 3.1 Role and Responsibilities
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/<org>/<repo>/manager/bootstrap-manager.sh | bash
-```
+The Management Node is the single source of truth for the cloud and is
+responsible for:
 
-After completion, CloudStack UI will be available at:
+- Scheduling and placing virtual machines
+- Orchestrating compute, network, and storage resources
+- Maintaining global system state and metadata
+- Exposing CloudStack REST APIs and Web UI
+- Coordinating all KVM Worker Nodes
 
-```
-http://<manager-ip>:8080/client
-```
+----------------------------------------------------------------
 
-Default credentials:
-- Username: admin
-- Password: password
+### 3.2 Installed Components
 
----
+CloudStack Management Server
+- Package: cloudstack-management
+- Runs as a Spring Boot application
+- Uses embedded Jetty (no external application server)
 
-### 2. Bootstrap Worker Node
+Database (MariaDB)
+- Runs locally on the Management Node
+- Stores:
+  - VM and host metadata
+  - Network topology and state
+  - Accounts, domains, and projects
+  - Storage mappings and capacity data
 
-```bash
-MANAGER_IP=192.168.1.10 \
-curl -fsSL https://raw.githubusercontent.com/<org>/<repo>/worker/bootstrap-worker.sh | bash
-```
+Storage Services (Lab Mode Only)
+- NFS server running on the Management Node
+- Exports:
+  - Primary Storage (VM disks)
+  - Secondary Storage (templates, ISOs, snapshots)
 
-The worker will automatically register itself to the management server once the cluster exists.
+WARNING:
+Running NFS on the Management Node is for lab/demo only.
+This design is NOT suitable for production environments.
 
----
+================================================================
 
-### 3. Initialize CloudStack Topology (Logic Layer)
+## 4. Design Principles
 
-```bash
-bash cloudmonkey/cloudmonkey-init.sh
-```
+- Script-first provisioning
+- No UI-based initial configuration
+- Idempotent bootstrap per node
+- Easy teardown and rebuild
+- Clear separation between control plane and data plane
+- All system state is defined and versioned in Git
 
-This script creates:
-- Basic Zone
-- Pod
-- KVM Cluster
-- Primary Storage (NFS)
-- Secondary Storage (NFS)
+================================================================
 
-This step fully replaces initial UI-based configuration.
-
----
-
-## Environment Assumptions
-
-- OS: Ubuntu 22.04 LTS
-- CloudStack: 4.18
-- Hypervisor: KVM
-- Network model: Basic Zone
-- Storage backend: NFS (lab or demo only)
-
----
-
-## Important Notes
-
-- Each bootstrap script must be executed only once per node
-- Do not use NFS on the management node in production
-- Run cloudmonkey-init.sh only after:
-  - Management server is running
-  - Worker agent is connected
-  - NFS storage is available
-
----
-
-## Design Philosophy
-
-- bootstrap-manager.sh and bootstrap-worker.sh
-  Handle physical host and OS-level provisioning
-
-- cloudmonkey-init.sh
-  Handles CloudStack logical topology
-
-No UI clicks. No hidden state. Everything is defined in Git.
+No UI clicks.
+No hidden state.
+Everything is defined in Git.
