@@ -1,6 +1,6 @@
 # Bootstrap CloudStack Management Node (Rocky Linux)
 
-This document provides a **step-by-step bootstrap guide** for installing
+This document provides a **step-by-step bootstrap guide** for installing  
 a CloudStack Management Node on a fresh Rocky Linux system.
 
 All steps are designed to be:
@@ -9,7 +9,7 @@ All steps are designed to be:
 - Non-interactive where possible
 - Suitable for lab / PoC environments
 
-================================================================
+---
 
 ## Step 0 – Preconditions
 
@@ -21,184 +21,153 @@ Before starting, ensure:
 - Proper hostname and DNS resolution
 - Internet access (or local mirror)
 
-The Management Node MUST NOT run any guest VMs.
+> **NOTE**  
+> The Management Node **MUST NOT** run any guest VMs.
 
-================================================================
+---
 
 ## Step 1 – OS Preparation
 
-1. Update system packages
+### 1. Update system packages
+```bash
+dnf -y update
+```
 
-   dnf -y update
+### 2. Set hostname
+```bash
+hostnamectl set-hostname cloudstack-mgmt
+```
 
-2. Set hostname
+### 3. Disable firewalld (lab only)
+```bash
+systemctl disable --now firewalld
+```
 
-   hostnamectl set-hostname cloudstack-mgmt
+### 4. Set SELinux to permissive (lab only)
+```bash
+sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+setenforce 0
+```
 
-3. Disable firewalld (lab only)
+### 5. Enable time synchronization
+```bash
+dnf -y install chrony
+systemctl enable --now chronyd
+```
 
-   systemctl disable --now firewalld
-
-4. Set SELinux to permissive (lab only)
-
-   sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
-   setenforce 0
-
-5. Enable time synchronization
-
-   dnf -y install chrony
-   systemctl enable --now chronyd
-
-================================================================
+---
 
 ## Step 2 – Install Required Repositories
 
-1. Enable EPEL
+### 1. Enable EPEL
+```bash
+dnf -y install epel-release
+```
 
-   dnf -y install epel-release
+### 2. Add Apache CloudStack repository
+```bash
+dnf -y install https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm
+```
 
-2. Add Apache CloudStack repository
-
-   dnf -y install https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm
-
-(Adjust repository version according to Rocky Linux major version.)
-
-================================================================
+---
 
 ## Step 3 – Install Required Packages
 
-Install core services needed by the Management Node:
+```bash
+dnf -y install \
+  cloudstack-management \
+  mariadb-server \
+  nfs-utils \
+  python3 \
+  curl \
+  wget
+```
 
-   dnf -y install \
-     cloudstack-management \
-     mariadb-server \
-     nfs-utils \
-     python3 \
-     curl \
-     wget
+```bash
+systemctl enable mariadb
+systemctl enable nfs-server
+```
 
-Enable services:
-
-   systemctl enable mariadb
-   systemctl enable nfs-server
-
-================================================================
+---
 
 ## Step 4 – Configure and Start MariaDB
 
-1. Start MariaDB
+```bash
+systemctl start mariadb
+```
 
-   systemctl start mariadb
+```bash
+mysql_secure_installation
+```
 
-2. Secure MariaDB (recommended even for lab)
+```bash
+systemctl status mariadb
+```
 
-   mysql_secure_installation
-
-3. Verify MariaDB is running
-
-   systemctl status mariadb
-
-MariaDB will store all CloudStack metadata and must remain available at all times.
-
-================================================================
+---
 
 ## Step 5 – Configure NFS (Lab Mode Only)
 
-Create storage directories:
+```bash
+mkdir -p /export/primary
+mkdir -p /export/secondary
+```
 
-   mkdir -p /export/primary
-   mkdir -p /export/secondary
+```bash
+chown -R nfsnobody:nfsnobody /export
+chmod -R 755 /export
+```
 
-Set permissions:
+```bash
+echo "/export *(rw,async,no_root_squash,no_subtree_check)" >> /etc/exports
+```
 
-   chown -R nfsnobody:nfsnobody /export
-   chmod -R 755 /export
+```bash
+systemctl start nfs-server
+exportfs -a
+```
 
-Configure NFS exports:
-
-   echo "/export *(rw,async,no_root_squash,no_subtree_check)" >> /etc/exports
-
-Start NFS services:
-
-   systemctl start nfs-server
-   exportfs -a
-
-WARNING:
-Running NFS on the Management Node is for lab/demo only.
-Do NOT use this layout in production.
-
-================================================================
+---
 
 ## Step 6 – Initialize CloudStack Database
 
-Initialize CloudStack schemas and configuration:
+```bash
+cloudstack-setup-databases cloud:cloud@localhost \
+  --deploy-as=root \
+  --mariadb-root-password <root_password>
+```
 
-   cloudstack-setup-databases cloud:cloud@localhost \
-     --deploy-as=root \
-     --mariadb-root-password <root_password>
-
-This step must be executed EXACTLY ONCE.
-
-================================================================
+---
 
 ## Step 7 – Configure and Start CloudStack Management Server
 
-Run CloudStack management setup:
+```bash
+cloudstack-setup-management
+```
 
-   cloudstack-setup-management
+```bash
+systemctl start cloudstack-management
+systemctl enable cloudstack-management
+```
 
-Start the management service:
-
-   systemctl start cloudstack-management
-
-Enable on boot:
-
-   systemctl enable cloudstack-management
-
-================================================================
+---
 
 ## Step 8 – Verify Management Node
 
-Verify services:
+```bash
+systemctl status cloudstack-management
+systemctl status mariadb
+systemctl status nfs-server
+```
 
-   systemctl status cloudstack-management
-   systemctl status mariadb
-   systemctl status nfs-server
+```
+http://<management-ip>:8080/client
+```
 
-Verify API/UI access:
-
-   http://<management-ip>:8080/client
-
-Default credentials:
-- Username: admin
-- Password: password
-
-Check logs if needed:
-
-   /var/log/cloudstack/management/management-server.log
-
-================================================================
-
-## Step 9 – Post-Bootstrap Notes
-
-- Do NOT configure zones, pods, or clusters via UI
-- Use cloudmonkey or scripted API calls instead
-- Worker nodes should be bootstrapped separately
-- CloudStack logical topology comes AFTER this step
-
-================================================================
+---
 
 ## Design Principles
 
 - Script-first installation
 - No UI-based initial configuration
 - Idempotent where possible
-- Clear separation between:
-  - OS bootstrap
-  - Management services
-  - Logical CloudStack configuration
-
-================================================================
-
-This file defines the exact bootstrap procedure for a
-CloudStack Management Node on Rocky Linux.
