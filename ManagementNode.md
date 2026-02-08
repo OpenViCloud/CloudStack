@@ -1,13 +1,17 @@
-# Bootstrap CloudStack Management Node (Rocky Linux)
+# Bootstrap CloudStack Management Node (Rocky Linux) – CloudStack 4.20 + MariaDB pinned
 
 This document provides a **step-by-step bootstrap guide** for installing  
 a CloudStack Management Node on a fresh Rocky Linux system.
+
+Target stack:
+- **CloudStack 4.20**
+- **MariaDB 10.5 (pinned)**
 
 All steps are designed to be:
 - Script-friendly
 - Reproducible
 - Non-interactive where possible
-- Suitable for lab / PoC environments
+- Suitable for lab / PoC / long-lived environments
 
 ---
 
@@ -15,7 +19,7 @@ All steps are designed to be:
 
 Before starting, ensure:
 
-- Rocky Linux 8 or 9 (Minimal Install)
+- Rocky Linux 8 (recommended) or 9
 - Root or passwordless sudo access
 - Static IP configured
 - Proper hostname and DNS resolution
@@ -57,26 +61,54 @@ systemctl enable --now chronyd
 
 ---
 
-## Step 2 – Install Required Repositories (CloudStack 4.20)
+## Step 2 – Install Required Repositories
 
+### 2.1 Enable EPEL
 ```bash
-# Enable EPEL
 dnf -y install epel-release
+```
 
-# Add Apache CloudStack repository (Rocky / CentOS 8 compatible)
+### 2.2 Add Apache CloudStack repository
+```bash
 dnf -y install https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm
+```
 
-# Explicitly enable CloudStack 4.20 and disable older versions
+### 2.3 Explicitly enable CloudStack 4.20
+```bash
 dnf config-manager --set-enabled cloudstack-4.20
 dnf config-manager --set-disabled cloudstack-4.19 cloudstack-4.18 || true
 ```
 
 ---
 
-## Step 3 – Install Required Packages
+## Step 3 – Pin MariaDB Version (IMPORTANT)
+
+CloudStack 4.20 is validated primarily with **MariaDB 10.5 / 10.6**.  
+This guide **pins MariaDB to 10.5** to avoid unexpected upgrades.
+
+### 3.1 Reset and enable MariaDB 10.5 module
+```bash
+dnf module reset mariadb -y
+dnf module enable mariadb:10.5 -y
+```
+
+### 3.2 Install MariaDB
+```bash
+dnf -y install mariadb-server
+```
+
+### 3.3 (Optional but recommended) Version lock MariaDB
+```bash
+dnf -y install dnf-plugins-core
+dnf versionlock add mariadb\*
+```
+
+---
+
+## Step 4 – Install CloudStack and Supporting Packages
 
 ```bash
-dnf -y install   cloudstack-management   mariadb-server   nfs-utils   python3   curl   wget
+dnf -y install   cloudstack-management   nfs-utils   python3   curl   wget
 ```
 
 Enable services:
@@ -85,19 +117,21 @@ systemctl enable mariadb
 systemctl enable nfs-server
 ```
 
-Verify CloudStack version:
+Verify versions:
 ```bash
 rpm -qi cloudstack-management | grep Version
+rpm -qi mariadb-server | grep Version
 ```
 
 Expected:
 ```
-Version     : 4.20.x
+CloudStack : 4.20.x
+MariaDB    : 10.5.x
 ```
 
 ---
 
-## Step 4 – Configure and Start MariaDB
+## Step 5 – Configure and Start MariaDB
 
 ```bash
 systemctl start mariadb
@@ -113,7 +147,7 @@ systemctl status mariadb
 
 ---
 
-## Step 5 – Configure NFS (Lab Mode Only)
+## Step 6 – Configure NFS (Lab Mode Only)
 
 ```bash
 mkdir -p /export/primary
@@ -139,17 +173,19 @@ exportfs -a
 
 ---
 
-## Step 6 – Initialize CloudStack Database
+## Step 7 – Initialize CloudStack Database
 
 ```bash
-cloudstack-setup-databases cloud:cloud@localhost   --deploy-as=root   --mariadb-root-password <root_password>
+cloudstack-setup-databases cloud:cloud@localhost \
+  --deploy-as=root \
+  --mariadb-root-password <root_password>
 ```
 
 > ⚠️ This step must be executed **EXACTLY ONCE**.
 
 ---
 
-## Step 7 – Configure and Start CloudStack Management Server
+## Step 8 – Configure and Start CloudStack Management Server
 
 ```bash
 cloudstack-setup-management
@@ -162,7 +198,7 @@ systemctl enable cloudstack-management
 
 ---
 
-## Step 8 – Verify Management Node
+## Step 9 – Verify Management Node
 
 ```bash
 systemctl status cloudstack-management
@@ -170,6 +206,7 @@ systemctl status mariadb
 systemctl status nfs-server
 ```
 
+Access UI/API:
 ```
 http://<management-ip>:8080/client
 ```
@@ -178,6 +215,13 @@ http://<management-ip>:8080/client
 
 ## Design Principles
 
+- Explicit version pinning (CloudStack & MariaDB)
 - Script-first installation
 - No UI-based initial configuration
+- Fail-fast on version mismatch
 - Idempotent where possible
+
+---
+
+This file defines a **stable, reproducible bootstrap procedure** for a  
+CloudStack 4.20 Management Node with pinned MariaDB.
