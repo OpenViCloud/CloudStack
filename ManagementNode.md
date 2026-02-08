@@ -57,16 +57,18 @@ systemctl enable --now chronyd
 
 ---
 
-## Step 2 – Install Required Repositories
+## Step 2 – Install Required Repositories (CloudStack 4.20)
 
-### 1. Enable EPEL
 ```bash
+# Enable EPEL
 dnf -y install epel-release
-```
 
-### 2. Add Apache CloudStack repository
-```bash
+# Add Apache CloudStack repository (Rocky / CentOS 8 compatible)
 dnf -y install https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm
+
+# Explicitly enable CloudStack 4.20 and disable older versions
+dnf config-manager --set-enabled cloudstack-4.20
+dnf config-manager --set-disabled cloudstack-4.19 cloudstack-4.18 || true
 ```
 
 ---
@@ -74,18 +76,23 @@ dnf -y install https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm
 ## Step 3 – Install Required Packages
 
 ```bash
-dnf -y install \
-  cloudstack-management \
-  mariadb-server \
-  nfs-utils \
-  python3 \
-  curl \
-  wget
+dnf -y install   cloudstack-management   mariadb-server   nfs-utils   python3   curl   wget
 ```
 
+Enable services:
 ```bash
 systemctl enable mariadb
 systemctl enable nfs-server
+```
+
+Verify CloudStack version:
+```bash
+rpm -qi cloudstack-management | grep Version
+```
+
+Expected:
+```
+Version     : 4.20.x
 ```
 
 ---
@@ -127,15 +134,18 @@ systemctl start nfs-server
 exportfs -a
 ```
 
+> ⚠️ **WARNING**  
+> Running NFS on the Management Node is **for lab/demo only**.
+
 ---
 
 ## Step 6 – Initialize CloudStack Database
 
 ```bash
-cloudstack-setup-databases cloud:cloud@localhost \
-  --deploy-as=root \
-  --mariadb-root-password <root_password>
+cloudstack-setup-databases cloud:cloud@localhost   --deploy-as=root   --mariadb-root-password <root_password>
 ```
+
+> ⚠️ This step must be executed **EXACTLY ONCE**.
 
 ---
 
