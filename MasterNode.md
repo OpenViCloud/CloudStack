@@ -190,8 +190,7 @@ sudo exportfs -a
 
 ```bash
 sudo cloudstack-setup-databases cloud:cloud@localhost \
-  --deploy-as=root \
-  --mariadb-root-password <root_password>
+--deploy-as=root:P@ssw0rd
 ```
 
 > ⚠️ This step must be executed **EXACTLY ONCE**.
