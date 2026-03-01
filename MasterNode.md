@@ -168,7 +168,7 @@ sudo mkdir -p /export/secondary
 ```
 
 ```bash
-sudo chown -R nfsnobody:nfsnobody /export
+sudo chown -R nobody:nobody /export
 sudo chmod -R 755 /export
 ```
 
