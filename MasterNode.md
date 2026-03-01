@@ -20,7 +20,7 @@ All steps are designed to be:
 Before starting, ensure:
 
 - Rocky Linux 8 (recommended) or 9
-- Root or passwordless sudo access
+- User with passwordless sudo access
 - Static IP configured
 - Proper hostname and DNS resolution
 - Internet access (or local mirror)
@@ -34,29 +34,29 @@ Before starting, ensure:
 
 ### 1. Update system packages
 ```bash
-dnf -y update
+sudo dnf -y update
 ```
 
 ### 2. Set hostname
 ```bash
-hostnamectl set-hostname cloudstack-mgmt
+sudo hostnamectl set-hostname cloudstack-mgmt
 ```
 
 ### 3. Disable firewalld (lab only)
 ```bash
-systemctl disable --now firewalld
+sudo systemctl disable --now firewalld
 ```
 
 ### 4. Set SELinux to permissive (lab only)
 ```bash
-sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
-setenforce 0
+sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+sudo setenforce 0
 ```
 
 ### 5. Enable time synchronization
 ```bash
-dnf -y install chrony
-systemctl enable --now chronyd
+sudo dnf -y install chrony
+sudo systemctl enable --now chronyd
 ```
 
 ---
@@ -65,18 +65,25 @@ systemctl enable --now chronyd
 
 ### 2.1 Enable EPEL
 ```bash
-dnf -y install epel-release
+sudo dnf -y install epel-release
 ```
 
 ### 2.2 Add Apache CloudStack repository
 ```bash
-dnf -y install https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm
+sudo tee /etc/yum.repos.d/cloudstack.repo > /dev/null <<EOF
+[cloudstack]
+name=Apache CloudStack
+baseurl=http://download.cloudstack.org/centos/8/4.20/
+enabled=1
+gpgcheck=0
+EOF
 ```
 
-### 2.3 Explicitly enable CloudStack 4.20
+### 2.3 Install CloudStack packages
 ```bash
-dnf config-manager --set-enabled cloudstack-4.20
-dnf config-manager --set-disabled cloudstack-4.19 cloudstack-4.18 || true
+sudo dnf clean all
+sudo dnf makecache
+sudo dnf install -y cloudstack-management
 ```
 
 ---
@@ -88,19 +95,19 @@ This guide **pins MariaDB to 10.5** to avoid unexpected upgrades.
 
 ### 3.1 Reset and enable MariaDB 10.5 module
 ```bash
-dnf module reset mariadb -y
-dnf module enable mariadb:10.5 -y
+sudo dnf module reset mariadb -y
+sudo dnf module enable mariadb:10.5 -y
 ```
 
 ### 3.2 Install MariaDB
 ```bash
-dnf -y install mariadb-server
+sudo dnf -y install mariadb-server
 ```
 
 ### 3.3 (Optional but recommended) Version lock MariaDB
 ```bash
-dnf -y install dnf-plugins-core
-dnf versionlock add mariadb\*
+sudo dnf -y install dnf-plugins-core
+sudo dnf versionlock add mariadb\*
 ```
 
 ---
@@ -108,13 +115,18 @@ dnf versionlock add mariadb\*
 ## Step 4 – Install CloudStack and Supporting Packages
 
 ```bash
-dnf -y install   cloudstack-management   nfs-utils   python3   curl   wget
+sudo dnf -y install \
+  cloudstack-management \
+  nfs-utils \
+  python3 \
+  curl \
+  wget
 ```
 
 Enable services:
 ```bash
-systemctl enable mariadb
-systemctl enable nfs-server
+sudo systemctl enable mariadb
+sudo systemctl enable nfs-server
 ```
 
 Verify versions:
@@ -134,15 +146,15 @@ MariaDB    : 10.5.x
 ## Step 5 – Configure and Start MariaDB
 
 ```bash
-systemctl start mariadb
+sudo systemctl start mariadb
 ```
 
 ```bash
-mysql_secure_installation
+sudo mysql_secure_installation
 ```
 
 ```bash
-systemctl status mariadb
+sudo systemctl status mariadb
 ```
 
 ---
@@ -150,22 +162,22 @@ systemctl status mariadb
 ## Step 6 – Configure NFS (Lab Mode Only)
 
 ```bash
-mkdir -p /export/primary
-mkdir -p /export/secondary
+sudo mkdir -p /export/primary
+sudo mkdir -p /export/secondary
 ```
 
 ```bash
-chown -R nfsnobody:nfsnobody /export
-chmod -R 755 /export
+sudo chown -R nfsnobody:nfsnobody /export
+sudo chmod -R 755 /export
 ```
 
 ```bash
-echo "/export *(rw,async,no_root_squash,no_subtree_check)" >> /etc/exports
+echo "/export *(rw,async,no_root_squash,no_subtree_check)" | sudo tee -a /etc/exports
 ```
 
 ```bash
-systemctl start nfs-server
-exportfs -a
+sudo systemctl start nfs-server
+sudo exportfs -a
 ```
 
 > ⚠️ **WARNING**  
@@ -176,7 +188,7 @@ exportfs -a
 ## Step 7 – Initialize CloudStack Database
 
 ```bash
-cloudstack-setup-databases cloud:cloud@localhost \
+sudo cloudstack-setup-databases cloud:cloud@localhost \
   --deploy-as=root \
   --mariadb-root-password <root_password>
 ```
@@ -188,12 +200,12 @@ cloudstack-setup-databases cloud:cloud@localhost \
 ## Step 8 – Configure and Start CloudStack Management Server
 
 ```bash
-cloudstack-setup-management
+sudo cloudstack-setup-management
 ```
 
 ```bash
-systemctl start cloudstack-management
-systemctl enable cloudstack-management
+sudo systemctl start cloudstack-management
+sudo systemctl enable cloudstack-management
 ```
 
 ---
@@ -201,9 +213,9 @@ systemctl enable cloudstack-management
 ## Step 9 – Verify Management Node
 
 ```bash
-systemctl status cloudstack-management
-systemctl status mariadb
-systemctl status nfs-server
+sudo systemctl status cloudstack-management
+sudo systemctl status mariadb
+sudo systemctl status nfs-server
 ```
 
 Access UI/API:
