@@ -106,6 +106,7 @@ sudo dnf -y install mariadb-server
 
 ### 3.3 (Optional but recommended) Version lock MariaDB
 ```bash
+sudo dnf install 'dnf-command(versionlock)'
 sudo dnf -y install dnf-plugins-core
 sudo dnf versionlock add mariadb\*
 ```
