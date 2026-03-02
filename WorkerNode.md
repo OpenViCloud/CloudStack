@@ -16,20 +16,20 @@ This document provides a professional, script-ready guide to bootstrap a KVM Wor
 
 ### 2.1 Basic Updates & Tools
 ```bash
-dnf -y update
-dnf -y install epel-release
-dnf -y install bridge-utils network-scripts dnf-plugins-core chrony
-systemctl enable --now chronyd
+sudo dnf -y update
+sudo dnf -y install epel-release
+sudo dnf -y install bridge-utils network-scripts dnf-plugins-core chrony
+sudo systemctl enable --now chronyd
 ```
 
 ### 2.2 Security Configuration (Lab/PoC Mode)
 ```bash
 # Disable Firewalld to prevent blocking VM traffic
-systemctl disable --now firewalld
+sudo systemctl disable --now firewalld
 
 # Set SELinux to Permissive
-setenforce 0
-sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+sudo setenforce 0
+sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 ```
 
 ---
@@ -42,7 +42,7 @@ CloudStack KVM nodes require standard Linux Bridges.
 
 ### 3.1 Configure Physical Interface (e.g., eth0)
 ```bash
-cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
+sudo cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
 DEVICE=eth0
 ONBOOT=yes
 HOTPLUG=no
@@ -54,7 +54,7 @@ EOF
 
 ### 3.2 Configure Management Bridge (cloudbr0)
 ```bash
-cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-cloudbr0
+sudo cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-cloudbr0
 DEVICE=cloudbr0
 ONBOOT=yes
 HOTPLUG=no
@@ -71,7 +71,7 @@ EOF
 
 ### 3.3 Configure Guest Bridge (cloudbr1)
 ```bash
-cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-cloudbr1
+sudo cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-cloudbr1
 DEVICE=cloudbr1
 ONBOOT=yes
 HOTPLUG=no
@@ -84,7 +84,7 @@ EOF
 
 ```bash
 # Apply changes
-systemctl restart network
+sudo systemctl restart network
 ```
 
 ---
@@ -93,13 +93,22 @@ systemctl restart network
 
 ### 4.1 Configure Repositories
 ```bash
-dnf -y install [https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm](https://download.cloudstack.org/centos/8/cloudstack-release-8.rpm)
-dnf config-manager --set-enabled cloudstack-4.20
+sudo tee /etc/yum.repos.d/cloudstack.repo > /dev/null <<EOF
+[cloudstack]
+name=Apache CloudStack
+baseurl=http://download.cloudstack.org/centos/8/4.20/
+enabled=1
+gpgcheck=0
+EOF
+```
+
+```bash
+sudo dnf config-manager --set-enabled cloudstack-4.20
 ```
 
 ### 4.2 Install Packages
 ```bash
-dnf -y install cloudstack-agent qemu-kvm libvirt
+sudo dnf -y install cloudstack-agent qemu-kvm libvirt
 ```
 
 ---
@@ -111,21 +120,21 @@ CloudStack needs Libvirt to listen on TCP for Live Migration and remote orchestr
 ### 5.1 Enable TCP Listening
 ```bash
 # Modify libvirtd.conf
-sed -i 's/^#listen_tls = 0/listen_tls = 0/' /etc/libvirt/libvirtd.conf
-sed -i 's/^#listen_tcp = 1/listen_tcp = 1/' /etc/libvirt/libvirtd.conf
-sed -i 's/^#tcp_port = "16509"/tcp_port = "16509"/' /etc/libvirt/libvirtd.conf
-sed -i 's/^#auth_tcp = "sasl"/auth_tcp = "none"/' /etc/libvirt/libvirtd.conf
+sudo sed -i 's/^#listen_tls = 0/listen_tls = 0/' /etc/libvirt/libvirtd.conf
+sudo sed -i 's/^#listen_tcp = 1/listen_tcp = 1/' /etc/libvirt/libvirtd.conf
+sudo sed -i 's/^#tcp_port = "16509"/tcp_port = "16509"/' /etc/libvirt/libvirtd.conf
+sudo sed -i 's/^#auth_tcp = "sasl"/auth_tcp = "none"/' /etc/libvirt/libvirtd.conf
 
 # Add listen flag to service arguments
-echo 'LIBVIRTD_ARGS="--listen"' >> /etc/sysconfig/libvirtd
+echo 'LIBVIRTD_ARGS="--listen"' | sudo tee -a /etc/sysconfig/libvirtd > /dev/null
 
-systemctl enable --now libvirtd
+sudo systemctl enable --now libvirtd
 ```
 
 ### 5.2 Configure QEMU VNC
 ```bash
-sed -i 's/^#vnc_listen = "127.0.0.1"/vnc_listen = "0.0.0.0"/' /etc/libvirt/qemu.conf
-systemctl restart libvirtd
+sudo sed -i 's/^#vnc_listen = "127.0.0.1"/vnc_listen = "0.0.0.0"/' /etc/libvirt/qemu.conf
+sudo systemctl restart libvirtd
 ```
 
 ---
@@ -136,16 +145,16 @@ Update the agent properties to ensure it uses Linux Bridges and connects to the 
 
 ```bash
 # Set bridge type
-sed -i 's/network.bridge.type=native/network.bridge.type=linux/' /etc/cloudstack/agent/agent.properties
+sudo sed -i 's/network.bridge.type=native/network.bridge.type=linux/' /etc/cloudstack/agent/agent.properties
 
 # Enable and start the agent
-systemctl enable --now cloudstack-agent
+sudo systemctl enable --now cloudstack-agent
 ```
 
 ---
 
 ## 7. Verification & Next Steps
 
-1. **Check Status**: systemctl status cloudstack-agent
-2. **Check Logs**: tail -f /var/log/cloudstack/agent/agent.log
+1. **Check Status**: sudo systemctl status cloudstack-agent  
+2. **Check Logs**: sudo tail -f /var/log/cloudstack/agent/agent.log  
 3. **Register Host**: Go to the CloudStack UI -> Infrastructure -> Hosts -> Add Host.
