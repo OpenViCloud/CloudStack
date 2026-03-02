@@ -157,31 +157,65 @@ sudo dnf -y install cloudstack-agent qemu-kvm libvirt
 ```
 
 ---
-
 ## 5. Hypervisor Configuration (Libvirt)
 
-CloudStack needs Libvirt to listen on TCP for Live Migration and remote orchestration.
+On EL8/EL9 (Rocky Linux 8/9), libvirt uses systemd socket activation and modular daemons.
 
-### 5.1 Enable TCP Listening
+CloudStack 4.20 communicates with libvirt via local UNIX socket (`qemu:///system`).
+TCP listening is NOT required.
+
+---
+
+### 5.1 Enable and Start Libvirt
+
 ```bash
-# Modify libvirtd.conf
-sudo sed -i 's/^#listen_tls = 0/listen_tls = 0/' /etc/libvirt/libvirtd.conf
-sudo sed -i 's/^#listen_tcp = 1/listen_tcp = 1/' /etc/libvirt/libvirtd.conf
-sudo sed -i 's/^#tcp_port = "16509"/tcp_port = "16509"/' /etc/libvirt/libvirtd.conf
-sudo sed -i 's/^#auth_tcp = "sasl"/auth_tcp = "none"/' /etc/libvirt/libvirtd.conf
-
-# Add listen flag to service arguments
-echo 'LIBVIRTD_ARGS="--listen"' | sudo tee -a /etc/sysconfig/libvirtd > /dev/null
-
 sudo systemctl enable --now libvirtd
 ```
 
-### 5.2 Configure QEMU VNC
+Verify:
+
 ```bash
-sudo sed -i 's/^#vnc_listen = "127.0.0.1"/vnc_listen = "0.0.0.0"/' /etc/libvirt/qemu.conf
+sudo systemctl status libvirtd
+```
+
+Service must be active (running).
+
+---
+
+### 5.2 Configure QEMU VNC (Required)
+
+CloudStack uses VNC/SPICE for console access.
+By default, VNC listens only on localhost.
+
+Edit:
+
+```bash
+sudo vi /etc/libvirt/qemu.conf
+```
+
+Uncomment and set:
+
+```
+vnc_listen = "0.0.0.0"
+```
+
+Restart libvirt:
+
+```bash
 sudo systemctl restart libvirtd
 ```
 
+---
+
+### 5.3 Verify Libvirt Access
+
+Test local libvirt connectivity:
+
+```bash
+virsh -c qemu:///system list
+```
+
+If it returns an empty VM list without error, libvirt is working correctly.
 ---
 
 ## 6. CloudStack Agent Setup
