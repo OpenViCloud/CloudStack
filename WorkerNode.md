@@ -34,57 +34,103 @@ sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 
 ---
 
-## 3. Network Configuration (Bridge Setup)
+# 3. Network Configuration (Single NIC Bridge Setup)
 
-CloudStack KVM nodes require standard Linux Bridges. 
-- **cloudbr0**: Used for Management and Public traffic.
-- **cloudbr1**: Used for Guest (Private) traffic.
+## IMPORTANT
 
-### 3.1 Configure Physical Interface (e.g., eth0)
+- The Management Server must be reachable from this host.
+- The host IP MUST be assigned to a Linux bridge.
+- The physical NIC must NOT keep its own IP.
+
+---
+
+## 3.1 Identify your NIC
+
 ```bash
-sudo cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
-DEVICE=eth0
-ONBOOT=yes
-HOTPLUG=no
-NM_CONTROLLED=no
-BOOTPROTO=none
-BRIDGE=cloudbr0
-EOF
+ip a
 ```
 
-### 3.2 Configure Management Bridge (cloudbr0)
-```bash
-sudo cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-cloudbr0
-DEVICE=cloudbr0
-ONBOOT=yes
-HOTPLUG=no
-NM_CONTROLLED=no
-BOOTPROTO=static
-IPADDR=192.168.1.20  # Change to your Worker Node IP
-NETMASK=255.255.255.0
-GATEWAY=192.168.1.1
-DNS1=8.8.8.8
-TYPE=Bridge
-STP=off
-EOF
-```
+Example NIC: `enp4s0`
 
-### 3.3 Configure Guest Bridge (cloudbr1)
-```bash
-sudo cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-cloudbr1
-DEVICE=cloudbr1
-ONBOOT=yes
-HOTPLUG=no
-NM_CONTROLLED=no
-BOOTPROTO=none
-TYPE=Bridge
-STP=off
-EOF
-```
+---
+
+## 3.2 Create Linux Bridge
 
 ```bash
-# Apply changes
-sudo systemctl restart network
+sudo nmcli connection add type bridge ifname cloudbr0 con-name cloudbr0
+```
+
+---
+
+## 3.3 Assign Static IP to Bridge
+
+Example:
+
+```bash
+sudo nmcli connection modify cloudbr0 \
+  ipv4.method manual \
+  ipv4.addresses 192.168.0.140/24 \
+  ipv4.gateway 192.168.0.1 \
+  ipv4.dns 8.8.8.8 \
+  connection.autoconnect yes
+```
+
+---
+
+## 3.4 Attach NIC to Bridge
+
+```bash
+sudo nmcli connection add type bridge-slave ifname enp4s0 master cloudbr0
+```
+
+---
+
+## 3.5 Disable IP on Physical NIC
+
+```bash
+sudo nmcli connection modify enp4s0 ipv4.method disabled
+```
+
+---
+
+## 3.6 Restart Network
+
+⚠ This may temporarily disconnect SSH.
+
+```bash
+sudo systemctl restart NetworkManager
+```
+
+---
+
+## 3.7 Verify
+
+```bash
+ip a
+ip route
+```
+
+Expected:
+
+- cloudbr0 has IP
+- enp4s0 is slave of cloudbr0
+- Default route via cloudbr0
+
+Example:
+
+```
+default via 192.168.0.1 dev cloudbr0
+```
+
+---
+
+## 3.8 Disable Default libvirt NAT Network
+
+CloudStack does not use virbr0.
+
+```bash
+sudo virsh net-destroy default
+sudo virsh net-autostart --disable default
 ```
 
 ---
