@@ -44,10 +44,12 @@ sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 
 ---
 
-## 3.1 Identify your NIC
+## 3.1 Identify your NIC and clear
 
 ```bash
 ip a
+sudo nmcli connection delete cloudbr0
+nmcli connection show
 ```
 
 Example NIC: `enp4s0`
