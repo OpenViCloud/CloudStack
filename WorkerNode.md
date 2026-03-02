@@ -150,9 +150,6 @@ gpgcheck=0
 EOF
 ```
 
-```bash
-sudo dnf config-manager --set-enabled cloudstack-4.20
-```
 
 ### 4.2 Install Packages
 ```bash
