@@ -51,7 +51,11 @@ resource "cloudstack_cluster" "cluster" {
   zone_id      = cloudstack_zone.zone.id
   pod_id       = cloudstack_pod.pod.id
   hypervisor   = "KVM"
-  cluster_type = "ExternalManaged"
+  cluster_type = "CloudManaged"
+  allocation_state = "Enabled"
+  depends_on = [
+    cloudstack_secondary_storage.secondary
+  ]
 }
 
 ################################################################################
@@ -77,37 +81,7 @@ resource "cloudstack_secondary_storage" "secondary" {
 }
 
 ################################################################################
-# 4. VARIABLES
-################################################################################
-
-variable "api_url" { type = string }
-
-variable "api_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "zone_name" { default = "lab-zone" }
-variable "pod_name" { default = "lab-pod" }
-variable "cluster_name" { default = "lab-cluster" }
-
-variable "guest_cidr" { default = "10.1.0.0/16" }
-
-variable "pod_gateway" { default = "10.1.1.1" }
-variable "pod_netmask" { default = "255.255.255.0" }
-variable "pod_start_ip" { default = "10.1.1.10" }
-variable "pod_end_ip" { default = "10.1.1.200" }
-
-variable "secondary_nfs_ip" { type = string }
-variable "secondary_nfs_path" { default = "/export/secondary" }
-
-################################################################################
-# 5. OUTPUTS
+# 4. OUTPUTS
 ################################################################################
 
 output "summary" {
