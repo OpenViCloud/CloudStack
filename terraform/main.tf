@@ -3,10 +3,11 @@
 ################################################################################
 terraform {
   required_version = ">= 1.5.0"
+
   required_providers {
     cloudstack = {
       source  = "cloudstack/cloudstack"
-      version = "~> 0.4"
+      version = "~> 0.6"
     }
   }
 }
@@ -18,77 +19,97 @@ provider "cloudstack" {
 }
 
 ################################################################################
-# 2. CORE INFRASTRUCTURE (ZONE -> POD -> CLUSTER)
+# 2. CORE INFRASTRUCTURE
 ################################################################################
 
-# --- Zone ---
 resource "cloudstack_zone" "zone" {
   name               = var.zone_name
   network_type       = "Advanced"
-  guest_cidr_address = "10.1.0.0/16"
-  dns1               = "8.8.8.8"
-  dns2               = "8.8.4.4"
-  allocation_state   = "Enabled"
+  guest_cidr_address = var.guest_cidr
+
+  dns1 = "8.8.8.8"
+  dns2 = "8.8.4.4"
+
+  internal_dns1 = "8.8.8.8"
+  internal_dns2 = "8.8.4.4"
+
+  allocation_state = "Enabled"
 }
 
-# --- Pod ---
 resource "cloudstack_pod" "pod" {
-  name     = var.pod_name
-  zone_id  = cloudstack_zone.zone.id
-  cidr     = "10.1.1.0/24"
-  gateway  = "10.1.1.1"
-  start_ip = "10.1.1.10"
-  end_ip   = "10.1.1.200"
+  name    = var.pod_name
+  zone_id = cloudstack_zone.zone.id
+
+  gateway  = var.pod_gateway
+  netmask  = var.pod_netmask
+  start_ip = var.pod_start_ip
+  end_ip   = var.pod_end_ip
 }
 
-# --- Cluster ---
 resource "cloudstack_cluster" "cluster" {
-  name         = var.cluster_name
+  cluster_name = var.cluster_name
   zone_id      = cloudstack_zone.zone.id
   pod_id       = cloudstack_pod.pod.id
   hypervisor   = "KVM"
-  cluster_type = "CloudManaged"
+  cluster_type = "ExternalManaged"
 }
 
 ################################################################################
-# 3. STORAGE RESOURCES
+# 3. STORAGE
 ################################################################################
 
-# --- Primary Storage (Local Disk) ---
-resource "cloudstack_primary_storage" "local" {
-  name         = "local-primary"
-  zone_id      = cloudstack_zone.zone.id
-  cluster_id   = cloudstack_cluster.cluster.id
-  scope        = "CLUSTER"
-  storage_type = "Local"
-  url          = "local"
+resource "cloudstack_storage_pool" "local" {
+  name       = "local-primary"
+  zone_id    = cloudstack_zone.zone.id
+  pod_id     = cloudstack_pod.pod.id
+  cluster_id = cloudstack_cluster.cluster.id
+
+  scope            = "CLUSTER"
+  storage_provider = "defaultprimary"
+  hypervisor       = "KVM"
+  url              = "local:///"
 }
 
-# --- Secondary Storage (NFS) ---
 resource "cloudstack_secondary_storage" "secondary" {
-  zone_id = cloudstack_zone.zone.id
-  url     = "nfs://${var.secondary_nfs_ip}${var.secondary_nfs_path}"
+  zone_id          = cloudstack_zone.zone.id
+  storage_provider = "nfs"
+  url              = "nfs://${var.secondary_nfs_ip}/${trim(var.secondary_nfs_path, "/")}"
 }
 
 ################################################################################
-# 4. VARIABLES & OUTPUTS
+# 4. VARIABLES
 ################################################################################
 
-# Connection Variables
-variable "api_url"    { type = string }
-variable "api_key"    { type = string; sensitive = true }
-variable "secret_key" { type = string; sensitive = true }
+variable "api_url" { type = string }
 
-# Naming Variables
-variable "zone_name"    { default = "lab-zone" }
-variable "pod_name"     { default = "lab-pod" }
+variable "api_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "secret_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "zone_name" { default = "lab-zone" }
+variable "pod_name" { default = "lab-pod" }
 variable "cluster_name" { default = "lab-cluster" }
 
-# Storage Variables
-variable "secondary_nfs_ip"   { type = string }
+variable "guest_cidr" { default = "10.1.0.0/16" }
+
+variable "pod_gateway" { default = "10.1.1.1" }
+variable "pod_netmask" { default = "255.255.255.0" }
+variable "pod_start_ip" { default = "10.1.1.10" }
+variable "pod_end_ip" { default = "10.1.1.200" }
+
+variable "secondary_nfs_ip" { type = string }
 variable "secondary_nfs_path" { default = "/export/secondary" }
 
-# Outputs
+################################################################################
+# 5. OUTPUTS
+################################################################################
+
 output "summary" {
   value = {
     zone_id    = cloudstack_zone.zone.id
