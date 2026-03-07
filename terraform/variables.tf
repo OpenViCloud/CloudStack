@@ -14,14 +14,14 @@ variable "secret_key" {
   sensitive = true
 }
 
-variable "zone_name" { default = "lab-zone" }
-variable "pod_name" { default = "lab-pod" }
-variable "cluster_name" { default = "lab-cluster" }
+variable "zone_name" { default = "vn-hcm-zone" }
+variable "pod_name" { default = "vn-hcm-pod" }
+variable "cluster_name" { default = "vn-hcm-01-kvmcluster" }
 
 variable "guest_cidr" { default = "10.1.0.0/16" }
 
 variable "pod_gateway" {
-  default = "10.2.1.1"
+  default = "192.168.0.1"
 }
 
 variable "pod_netmask" {
@@ -29,16 +29,25 @@ variable "pod_netmask" {
 }
 
 variable "pod_start_ip" {
-  default = "10.2.1.10"
+  default = "192.168.0.150"
 }
 
 variable "pod_end_ip" {
-  default = "10.2.1.200"
+  default = "192.168.0.200"
 }
 
-variable "secondary_nfs_ip" { 
-  type = string 
+variable "nfs_ip" {
+  type = string
 }
-variable "secondary_nfs_path" { 
-  default = "/export/secondary" 
+variable "secondary_nfs_path" {
+  default = "/export/secondary"
 }
+
+variable "primary_nfs_path" {
+  default = "/export/primary"
+}
+
+variable "kvm_host_ip" { default = "" }
+variable "kvm_host_user" { default = "" }
+variable "kvm_host_password" { default = "" }
+
